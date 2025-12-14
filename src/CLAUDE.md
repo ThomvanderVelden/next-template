@@ -133,10 +133,6 @@ src/
 │       ├── auth.ts         # Auth schemas (SignInInput, SignUpInput, etc.)
 │       └── common.ts       # Reusable patterns (pagination, ActionResult)
 │
-├── types/                  # TypeScript types
-│   ├── index.ts            # App types + re-exports
-│   └── database.ts         # Prisma-derived types for complex queries
-│
 └── generated/
     └── prisma/             # Generated Prisma client
         └── client.ts
@@ -515,8 +511,7 @@ This template uses **Zod schemas as the single source of truth** for types throu
 | Location | Purpose | When to Use |
 |----------|---------|-------------|
 | `lib/validations/*.ts` | Zod schemas + inferred types | Forms, API input/output, any data shape |
-| `types/database.ts` | Prisma-derived types | Complex queries with relations |
-| `types/index.ts` | App-specific types | Route params, API wrappers |
+| `@/generated/prisma/client` | Prisma model types | Database queries (auto-inferred) |
 
 ### Adding a New Feature (Complete Workflow)
 
@@ -595,22 +590,7 @@ export * from "./common";
 export * from "./post";  // Add this line
 ```
 
-#### Step 3: Database Types (if needed)
-
-Only needed for complex Prisma queries with relations:
-
-```typescript
-// types/database.ts
-export type PostWithAuthor = Prisma.PostGetPayload<{
-  include: { author: { select: { id: true; name: true; image: true } } };
-}>;
-
-export const postWithAuthorInclude = {
-  author: { select: { id: true, name: true, image: true } },
-} as const satisfies Prisma.PostInclude;
-```
-
-#### Step 4: Server Action
+#### Step 3: Server Action
 
 ```typescript
 // lib/actions/post.ts
@@ -661,7 +641,7 @@ export async function createPost(
 }
 ```
 
-#### Step 5: Client Component (Form)
+#### Step 4: Client Component (Form)
 
 ```tsx
 // app/posts/new/page.tsx
@@ -741,17 +721,18 @@ export default function NewPostPage() {
 }
 ```
 
-#### Step 6: Server Component (List)
+#### Step 5: Server Component (List)
 
 ```tsx
 // app/posts/page.tsx
-import prisma from "@/lib/prisma";
-import { postWithAuthorInclude } from "@/types";
-import type { PostWithAuthor } from "@/lib/validations";
+import { prisma } from "@/lib/prisma";
 
 export default async function PostsPage() {
+  // TypeScript infers the type automatically from the query
   const posts = await prisma.post.findMany({
-    include: postWithAuthorInclude,
+    include: {
+      author: { select: { id: true, name: true, image: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -771,18 +752,15 @@ export default async function PostsPage() {
 ### Quick Reference: Type Imports
 
 ```typescript
-// Always import schemas AND types from validations
+// Import schemas AND types from validations
 import {
   createPostSchema,      // For validation
   type CreatePostInput,  // For typing
   type Post,             // For API responses
 } from "@/lib/validations";
 
-// Import Prisma query helpers from types
-import { postWithAuthorInclude } from "@/types";
-
-// Import Prisma-specific types when needed
-import type { PostWithAuthor } from "@/types";
+// Import Prisma types when needed (auto-generated)
+import type { User, Post } from "@/generated/prisma/client";
 ```
 
 ### Validation Schema Patterns

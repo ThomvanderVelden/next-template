@@ -1,8 +1,5 @@
 # Next.js 16 Template
 
-always update claude.md files after creating new features when necessary
-
-
 A modern Next.js template with authentication, database, and developer tooling.
 
 ## Tech Stack
@@ -35,9 +32,6 @@ src/
 │       ├── index.ts  # Re-exports all schemas
 │       ├── auth.ts   # Auth-related schemas
 │       └── common.ts # Reusable validation patterns
-├── types/            # TypeScript types
-│   ├── index.ts      # App-specific types
-│   └── database.ts   # Prisma-derived types for complex queries
 └── generated/        # Generated code (Prisma client)
 
 prisma/
@@ -65,9 +59,9 @@ Prisma Schema → Prisma Types (database layer)
    - Types are inferred with `z.infer<typeof schema>`
    - Same schema validates on client AND server
 
-2. **Prisma Types** (`types/database.ts`) - For database queries
-   - Complex queries with relations
-   - Use `Prisma.XGetPayload<>` for type extraction
+2. **Prisma Types** - For database queries
+   - Import directly from `@/generated/prisma/client`
+   - TypeScript infers types automatically from queries
 
 ### Usage examples:
 
@@ -109,3 +103,4 @@ pnpm docker:down      # Stop PostgreSQL
 - TypeScript strict mode enabled
 - Path alias: `@/*` maps to `./src/*`
 - IMPORTANT: Run `pnpm lint:fix` after making changes
+- IMPORTANT: Update CLAUDE.md files after creating new features when necessary
