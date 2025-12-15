@@ -1,0 +1,61 @@
+name: Claude Code Review (Reusable)
+
+# This makes the workflow callable from other repositories
+on:
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request for CRITICAL issues only.
+
+            **Security checklists:**
+            - OWASP ASVS 5.0: https://raw.githubusercontent.com/BonsaiSoftware/bonsai-engineering-handbook/main/.github/checklists/security-checklist.md
+            - Next.js: https://raw.githubusercontent.com/BonsaiSoftware/bonsai-engineering-handbook/main/.github/checklists/nextjs-checklist.md
+
+            Fetch the relevant checklist(s) based on the project's tech stack. Focus on:
+            - Injection attacks (SQL, command, XSS, XXE)
+            - Authentication/authorization flaws (IDOR, BOLA, missing auth)
+            - Secrets or credentials in code
+            - Insecure token handling (JWT, OAuth)
+            - Input validation bypasses
+            - Next.js: Server Actions without validation, missing 'server-only', data exposure to client
+
+            **Critical performance issues:**
+            - N+1 queries or database anti-patterns
+            - Memory leaks or unbounded growth
+            - Blocking operations in async contexts
+
+            Do NOT comment on: code style, formatting, naming, minor refactoring, documentation, or test coverage.
+
+            If no critical issues found, confirm the PR looks safe from a security and performance perspective.
+
+            Use the repository's CLAUDE.md for project-specific guidelines.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+          claude_args: '--allowed-tools "WebFetch,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
