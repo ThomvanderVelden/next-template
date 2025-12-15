@@ -1,0 +1,79 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  APP_NAME: nextjs-template
+  LOCATION: westeurope
+  REGION_CODE: weu
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: |
+          RESOURCE_GROUP="rg-${{ env.APP_NAME }}-${{ inputs.environment }}-${{ env.REGION_CODE }}"
+          az group create \
+            --name $RESOURCE_GROUP \
+            --location ${{ env.LOCATION }}
+
+      - name: Deploy Bicep
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: rg-${{ env.APP_NAME }}-${{ inputs.environment }}-${{ env.REGION_CODE }}
+          template: ./infrastructure/main.bicep
+          parameters: >
+            appName=${{ env.APP_NAME }}
+            environment=${{ inputs.environment }}
+            location=${{ env.LOCATION }}
+            postgresPassword=${{ secrets.POSTGRES_PASSWORD }}
+            betterAuthSecret=${{ secrets.BETTER_AUTH_SECRET }}
+            betterAuthUrl=${{ secrets.BETTER_AUTH_URL }}
+
+      - name: Output deployment info
+        id: output
+        run: |
+          RESOURCE_GROUP="rg-${{ env.APP_NAME }}-${{ inputs.environment }}-${{ env.REGION_CODE }}"
+          ACR_NAME="acr${APP_NAME//-/}${{ inputs.environment }}${{ env.REGION_CODE }}"
+          PSQL_NAME="psql-${{ env.APP_NAME }}-${{ inputs.environment }}-${{ env.REGION_CODE }}"
+
+          ACR_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv 2>/dev/null || echo "pending")
+          PSQL_FQDN=$(az postgres flexible-server show --name $PSQL_NAME --resource-group $RESOURCE_GROUP --query fullyQualifiedDomainName -o tsv 2>/dev/null || echo "pending")
+
+          echo "### Infrastructure Deployed! :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Resource Group:** $RESOURCE_GROUP" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**ACR:** $ACR_SERVER" >> $GITHUB_STEP_SUMMARY
+          echo "**PostgreSQL:** $PSQL_FQDN" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Run the 'Build and Deploy' workflow to deploy your app" >> $GITHUB_STEP_SUMMARY

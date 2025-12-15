@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      // === FILE OPERATIONS ===
       "Read(*)",
       "Edit(*)",
       "MultiEdit(*)",
@@ -10,7 +9,6 @@
       "Grep(*)",
       "LS(*)",
 
-      // === GIT (beperkt - geen commit/push) ===
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -30,7 +28,6 @@
       "Bash(git ls-files:*)",
       "Bash(git rev-parse:*)",
 
-      // === VEILIGE SHELL COMMANDS ===
       "Bash(ls:*)",
       "Bash(cat:*)",
       "Bash(head:*)",
@@ -49,13 +46,11 @@
       "Bash(date:*)",
       "Bash(tree:*)",
 
-      // === DIRECTORY MANAGEMENT ===
       "Bash(mkdir:*)",
       "Bash(touch:*)",
       "Bash(mv:*)",
       "Bash(cp:*)",
 
-      // === PACKAGE MANAGERS ===
       "Bash(npm:*)",
       "Bash(npx:*)",
       "Bash(yarn:*)",
@@ -67,7 +62,6 @@
       "Bash(go:*)",
       "Bash(composer:*)",
 
-      // === BUILD & TEST ===
       "Bash(make:*)",
       "Bash(cmake:*)",
       "Bash(tsc:*)",
@@ -80,13 +74,11 @@
       "Bash(eslint:*)",
       "Bash(prettier:*)",
 
-      // === PROCESS MANAGEMENT (beperkt) ===
       "Bash(pkill:*)",
       "Bash(killall:*)",
       "Bash(lsof:*)",
       "Bash(ps:*)",
 
-      // === UTILITIES ===
       "Bash(sed:*)",
       "Bash(awk:*)",
       "Bash(jq:*)",
@@ -97,27 +89,22 @@
       "Bash(zip:*)",
       "Bash(gzip:*)",
 
-      // === DOCKER (optioneel - verwijder als niet nodig) ===
       "Bash(docker:*)",
       "Bash(docker-compose:*)",
 
-      // === DATABASE CLI (optioneel) ===
       "Bash(sqlite3:*)",
       "Bash(psql:*)",
 
-      // === WEB/NETWORK (beperkt) ===
       "WebFetch(*)",
       "WebSearch(*)"
     ],
 
     "deny": [
-      // === GEVAARLIJKE FILE OPERATIES ===
       "Bash(rm:*)",
       "Bash(rmdir:*)",
       "Bash(rm -rf:*)",
       "Bash(shred:*)",
 
-      // === GIT WRITE OPERATIES ===
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git merge:*)",
@@ -126,13 +113,11 @@
       "Bash(git revert:*)",
       "Bash(git tag:*)",
 
-      // === SYSTEEM MODIFICATIE ===
       "Bash(sudo:*)",
       "Bash(su:*)",
       "Bash(chown:*)",
       "Bash(chmod 777:*)",
 
-      // === NETWORK RISICO'S ===
       "Bash(curl:*)",
       "Bash(wget:*)",
       "Bash(ssh:*)",
@@ -141,14 +126,12 @@
       "Bash(nc:*)",
       "Bash(netcat:*)",
 
-      // === PACKAGE INSTALL RISICO'S ===
       "Bash(apt:*)",
       "Bash(apt-get:*)",
       "Bash(brew:*)",
       "Bash(yum:*)",
       "Bash(dnf:*)",
 
-      // === SENSITIVE FILES ===
       "Read(.env)",
       "Read(.env.*)",
       "Read(./secrets/**)",
@@ -160,14 +143,9 @@
       "Read(~/.aws/*)",
       "Read(~/.config/gcloud/*)",
 
-      // === HISTORY/LOGS ===
       "Bash(history:*)",
       "Read(~/.bash_history)",
       "Read(~/.zsh_history)"
     ]
-  },
-
-  "env": {
-    // Optioneel: environment variables voor elke sessie
   }
 }

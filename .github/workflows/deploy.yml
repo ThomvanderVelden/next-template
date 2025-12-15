@@ -1,0 +1,131 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  APP_NAME: nextjs-template
+  LOCATION: westeurope
+  REGION_CODE: weu
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get ACR Login Server
+        id: acr
+        run: |
+          ACR_NAME="acr${APP_NAME//-/}${{ steps.env.outputs.environment }}${REGION_CODE}"
+          LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
+          echo "login-server=$LOGIN_SERVER" >> $GITHUB_OUTPUT
+          echo "acr-name=$ACR_NAME" >> $GITHUB_OUTPUT
+
+      - name: Login to ACR
+        run: az acr login --name ${{ steps.acr.outputs.acr-name }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.acr.outputs.login-server }}/${{ env.APP_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.build.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get deployment info
+        id: info
+        run: |
+          ENV="${{ needs.build.outputs.environment }}"
+          ACR_NAME="acr${APP_NAME//-/}${ENV}${REGION_CODE}"
+          LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
+          echo "acr-login-server=$LOGIN_SERVER" >> $GITHUB_OUTPUT
+          echo "container-app=ca-${APP_NAME}-${ENV}-${REGION_CODE}" >> $GITHUB_OUTPUT
+          echo "resource-group=rg-${APP_NAME}-${ENV}-${REGION_CODE}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Container App
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+
+          az containerapp update \
+            --name ${{ steps.info.outputs.container-app }} \
+            --resource-group ${{ steps.info.outputs.resource-group }} \
+            --image ${{ steps.info.outputs.acr-login-server }}/${{ env.APP_NAME }}:${{ github.sha }}
+
+      - name: Get deployment URL
+        run: |
+          URL=$(az containerapp show \
+            --name ${{ steps.info.outputs.container-app }} \
+            --resource-group ${{ steps.info.outputs.resource-group }} \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)
+
+          echo "### Deployment Complete! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.build.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://$URL" >> $GITHUB_STEP_SUMMARY

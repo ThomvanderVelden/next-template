@@ -11,7 +11,7 @@ A modern Next.js template with authentication, database, and developer tooling.
 - **Authentication**: Better Auth
 - **Validation**: Zod (e2e type inference)
 - **Linting/Formatting**: Biome
-- **Deployment**: Azure Functions (via OpenNext.js Azure)
+- **Deployment**: Azure Container Apps (Docker + GitHub Actions)
 
 ## Directory Structure
 
@@ -39,11 +39,15 @@ prisma/
 └── schema.prisma     # Database schema
 
 infrastructure/
-└── main.bicep        # Azure resource definitions (Bicep)
+├── main.bicep        # Main Bicep orchestrator
+└── modules/          # Bicep modules (acr, identity, container-app, monitoring)
 
+.github/workflows/
+├── deploy.yml        # CI/CD: Build and deploy to Container Apps
+└── infrastructure.yml # Deploy Azure infrastructure
+
+Dockerfile            # Multi-stage Docker build for Next.js
 prisma.config.ts      # Prisma configuration (root)
-open-next.config.ts   # OpenNext.js Azure adapter configuration
-azure.config.json     # Azure deployment settings
 ```
 
 ## E2E Typing Strategy
@@ -97,14 +101,13 @@ pnpm db:migrate       # Run migrations
 pnpm db:push          # Push schema changes
 pnpm db:studio        # Open Prisma Studio
 
-# Docker
+# Docker (local PostgreSQL)
 pnpm docker:up        # Start PostgreSQL
 pnpm docker:down      # Stop PostgreSQL
 
-# Azure Deployment
-pnpm azure:build      # Build for Azure Functions
-pnpm azure:deploy     # Deploy to Azure (provisions infra + deploys)
-pnpm azure:logs       # Stream live logs from Azure
+# Docker (app container)
+pnpm docker:build     # Build Docker image
+pnpm docker:run       # Run Docker container locally
 ```
 
 ## Code Standards
@@ -118,70 +121,105 @@ pnpm azure:logs       # Stream live logs from Azure
 
 ## Azure Deployment
 
-This template uses [OpenNext.js Azure](https://github.com/zpg6/opennextjs-azure) for serverless deployment to Azure Functions with full Next.js feature support.
+This template uses Azure Container Apps with GitHub Actions for automated CI/CD deployment.
 
 ### Prerequisites
 
 1. [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) installed
-2. Logged in to Azure: `az login`
-3. Active Azure subscription
-
-### Configuration Files
-
-- `azure.config.json` - Deployment settings (app name, region, environment)
-- `open-next.config.ts` - Azure adapter configuration
-- `infrastructure/main.bicep` - Azure resource definitions (auto-generated)
+2. [GitHub CLI](https://cli.github.com/) (optional, for managing secrets)
+3. Azure subscription with Contributor access
 
 ### Naming Convention
 
 Resources follow the pattern: `{resourcetype}-{project}-{environment}-{region}`
 
-| Resource Type       | Example Name                    |
-|--------------------|---------------------------------|
-| Resource Group     | `rg-myapp-prod-weu`             |
-| Function App       | `func-myapp-prod-weu`           |
-| Storage Account    | `stmyappprodweu`                |
-| App Service Plan   | `asp-myapp-prod-weu`            |
-| Application Insights | `appi-myapp-prod-weu`         |
+| Resource Type        | Example Name                    |
+|---------------------|--------------------------------|
+| Resource Group      | `rg-myapp-dev-weu`             |
+| Container Registry  | `acrmyappdevweu`               |
+| Container App       | `ca-myapp-dev-weu`             |
+| Container Apps Env  | `cae-myapp-dev-weu`            |
+| Managed Identity    | `id-myapp-dev-weu`             |
+| PostgreSQL Server   | `psql-myapp-dev-weu`           |
+| App Insights        | `appi-myapp-dev-weu`           |
 
 **Region codes**: `weu` (West Europe), `neu` (North Europe), `swe` (Sweden Central), `eus` (East US), etc.
 
 ### First-time Setup
 
-1. Edit `azure.config.json` with your app name and preferred region:
-   ```json
-   {
-     "appName": "myapp",
-     "resourceGroup": "rg-myapp-dev-weu",
-     "location": "westeurope",
-     "environment": "dev"
-   }
-   ```
-
-2. Build and deploy:
+1. **Configure OIDC authentication** (one-time):
    ```bash
-   pnpm azure:build
-   pnpm azure:deploy
+   # Update GITHUB_ORG and GITHUB_REPO in the script first
+   ./scripts/setup-oidc.sh
    ```
 
-### Environment Options
+2. **Add GitHub secrets** (from script output):
+   - `AZURE_CLIENT_ID`
+   - `AZURE_TENANT_ID`
+   - `AZURE_SUBSCRIPTION_ID`
 
-- `dev` - Consumption plan (Y1), pay-per-execution, auto-scale
-- `test` - Consumption plan (Y1), for testing
-- `staging` - Premium plan (EP1), always-ready, faster cold starts
-- `prod` - Premium plan (EP1), GRS storage for redundancy
+3. **Create GitHub environments** (dev, staging, prod) with secrets:
+   - `POSTGRES_PASSWORD` - PostgreSQL admin password (`openssl rand -base64 24`)
+   - `BETTER_AUTH_SECRET` - Auth secret (`openssl rand -base64 32`)
+   - `BETTER_AUTH_URL` - App URL (e.g., `https://ca-myapp-dev-weu.westeurope.azurecontainerapps.io`)
+
+4. **Deploy infrastructure** (GitHub Actions):
+   - Run "Deploy Infrastructure" workflow
+   - Select environment (dev/staging/prod)
+
+5. **Deploy app** (automatic on push to main, or manual):
+   - Run "Build and Deploy" workflow
+
+### Environment Scaling
+
+| Environment | Min Replicas | Max Replicas | Notes |
+|------------|-------------|-------------|-------|
+| dev        | 0           | 3           | Scale to zero (cost efficient) |
+| staging    | 0           | 5           | Scale to zero |
+| prod       | 1           | 10          | Always-on (no cold starts) |
 
 ### Azure Resources Created
 
 The deployment automatically provisions:
-- **Storage Account** (`st{project}{env}{region}`): ISR cache, static assets, image optimization
-- **Function App** (`func-{project}-{env}-{region}`): Serverless compute (Node.js 20)
-- **App Service Plan** (`asp-{project}-{env}-{region}`): Y1 (dev) or EP1 (prod)
-- **Application Insights** (`appi-{project}-{env}-{region}`): Monitoring and logging
+- **Container Registry** (`acr{project}{env}{region}`): Docker image storage
+- **Container App** (`ca-{project}-{env}-{region}`): Serverless container hosting
+- **PostgreSQL Flexible Server** (`psql-{project}-{env}-{region}`): Managed PostgreSQL database
+- **Managed Identity** (`id-{project}-{env}-{region}`): ACR pull authentication
+- **Log Analytics** (`log-{project}-{env}-{region}`): Centralized logging
+- **Application Insights** (`appi-{project}-{env}-{region}`): Monitoring and tracing
 
-### Database on Azure
+### PostgreSQL Sizing
 
-For production, use Azure Database for PostgreSQL:
-1. Create via Azure Portal or CLI
-2. Update `DATABASE_URL` in Function App settings
-3. Run migrations: `pnpm db:migrate`
+| Environment | SKU | Storage | High Availability |
+|------------|-----|---------|-------------------|
+| dev        | B1ms (Burstable) | 32 GB | Disabled |
+| staging    | B2s (Burstable) | 64 GB | Disabled |
+| prod       | D2s_v3 (General Purpose) | 128 GB | Zone Redundant |
+
+### Local Docker Testing
+
+```bash
+# Build the image
+pnpm docker:build
+
+# Run locally (requires .env.local with DATABASE_URL, etc.)
+pnpm docker:run
+```
+
+### Database Connection
+
+PostgreSQL is automatically provisioned and connected. The `DATABASE_URL` is generated and injected into the Container App at deployment time.
+
+**Connection details:**
+- User: `pgadmin`
+- Database: `app`
+- SSL: Required
+
+To run migrations after deployment:
+```bash
+# Connect to the container and run migrations
+az containerapp exec \
+  --name ca-myapp-dev-weu \
+  --resource-group rg-myapp-dev-weu \
+  --command "npx prisma migrate deploy"
+```
