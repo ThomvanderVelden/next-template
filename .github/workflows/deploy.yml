@@ -119,6 +119,13 @@ jobs:
             --resource-group ${{ steps.info.outputs.resource-group }} \
             --image ${{ steps.info.outputs.acr-login-server }}/${{ env.APP_NAME }}:${{ github.sha }}
 
+      - name: Run database migrations
+        run: |
+          az containerapp exec \
+            --name ${{ steps.info.outputs.container-app }} \
+            --resource-group ${{ steps.info.outputs.resource-group }} \
+            --command "npx prisma migrate deploy"
+
       - name: Get deployment URL
         run: |
           URL=$(az containerapp show \

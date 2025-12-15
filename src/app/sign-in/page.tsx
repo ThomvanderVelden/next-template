@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -15,58 +13,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { useAuthForm } from "@/lib/hooks";
 import { type SignInInput, signInSchema } from "@/lib/validations";
 
 export default function SignIn() {
-	const router = useRouter();
-	const [formData, setFormData] = useState<SignInInput>({
-		email: "",
-		password: "",
-	});
-	const [errors, setErrors] = useState<
-		Partial<Record<keyof SignInInput, string>>
-	>({});
-	const [submitError, setSubmitError] = useState("");
-	const [loading, setLoading] = useState(false);
-
-	function handleChange(field: keyof SignInInput, value: string) {
-		setFormData((prev) => ({ ...prev, [field]: value }));
-		// Clear field error on change
-		if (errors[field]) {
-			setErrors((prev) => ({ ...prev, [field]: undefined }));
-		}
-	}
-
-	async function handleSubmit(e: React.FormEvent) {
-		e.preventDefault();
-		setSubmitError("");
-		setErrors({});
-
-		// Validate with Zod schema
-		const result = signInSchema.safeParse(formData);
-		if (!result.success) {
-			const fieldErrors: Partial<Record<keyof SignInInput, string>> = {};
-			for (const issue of result.error.issues) {
-				const field = issue.path[0] as keyof SignInInput;
-				fieldErrors[field] = issue.message;
-			}
-			setErrors(fieldErrors);
-			return;
-		}
-
-		setLoading(true);
-
-		const { error } = await authClient.signIn.email(result.data);
-
-		if (error) {
-			setSubmitError(error.message ?? "Failed to sign in");
-			setLoading(false);
-			return;
-		}
-
-		router.push("/");
-		router.refresh();
-	}
+	const { formData, errors, submitError, loading, handleChange, handleSubmit } =
+		useAuthForm<typeof signInSchema>({
+			schema: signInSchema,
+			initialData: { email: "", password: "" } satisfies SignInInput,
+			onSubmit: (data) => authClient.signIn.email(data),
+		});
 
 	return (
 		<div className="flex min-h-screen items-center justify-center">
