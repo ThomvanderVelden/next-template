@@ -47,7 +47,7 @@ var regionCodes = {
   southeastasia: 'sea'
   eastasia: 'ea'
 }
-var regionCode = contains(regionCodes, location) ? regionCodes[location] : substring(replace(location, ' ', ''), 0, 3)
+var regionCode = regionCodes[?location] ?? substring(replace(location, ' ', ''), 0, 3)
 
 // Resource names following naming convention
 var sanitizedAppName = replace(toLower(appName), '-', '')
@@ -110,7 +110,7 @@ module containerApp 'modules/container-app.bicep' = {
     location: location
     environment: environment
     logAnalyticsCustomerId: monitoring.outputs.logAnalyticsCustomerId
-    logAnalyticsSharedKey: listKeys(monitoring.outputs.logAnalyticsWorkspaceId, '2022-10-01').primarySharedKey
+    logAnalyticsSharedKey: monitoring.outputs.logAnalyticsSharedKey
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     acrLoginServer: acr.outputs.loginServer
     identityId: identity.outputs.identityId
