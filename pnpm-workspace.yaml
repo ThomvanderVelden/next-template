@@ -1,0 +1,9 @@
+# pnpm workspace configuration
+# https://pnpm.io/pnpm-workspace_yaml
+
+packages: []
+
+# Security: Prevent installing packages published less than 2 hours ago
+# This helps mitigate supply chain attacks from newly published malicious packages
+onlyBuiltDependencies: []
+minimumReleaseAge: 7200
